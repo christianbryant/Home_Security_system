@@ -1,0 +1,8 @@
+{
+    "host":"YOUR_IP",
+    "port" : 1488,
+    "user" : "YOUR_USER",
+    "pass" : "PASSWORD",
+    "weburl" : "DISCORD_WEBHOOK_URL",
+    "topics" : [["YOUR_TOPIC_NAME", 2]]
+}
