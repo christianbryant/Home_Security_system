@@ -1,0 +1,14 @@
+{
+    "files.associations": {
+        "ostream": "cpp"
+    },
+    "cmake.configureSettings": {
+        "CMAKE_TOOLCHAIN_FILE": "C:/DEV/vcpkg/scripts/buildsystems/vcpkg.cmake"
+      },
+    "cmake.cmakePath": "C:\\Program Files\\CMake\\bin\\cmake.exe",
+    "cmake.mingwSearchDirs": [
+      "C:\\msys64\\mingw64\\bin"
+   ],
+  "cmake.generator": "MinGW Makefiles",
+  "cmake.sourceDirectory": "${workspaceFolder}/Hub_Code"
+}
