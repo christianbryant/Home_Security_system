@@ -1474,3 +1474,5 @@ ESP8266_Code/.gitignore
 ESP8266_Code/src/Home_Security_system.code-workspace
 Hub_Code/information.json
 git-filter-repo
+Security_Cam/information.json
+Security_Cam/.dockerignore
