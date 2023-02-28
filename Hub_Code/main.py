@@ -55,6 +55,13 @@ def bedroom_door_topic(msg):
     # Sets the current payload to past to compare to for next on_message callback.
     last_payload = str(msg.payload)
 
+def motion_topic(msg):
+    global last_payload
+    global json_template
+    if(str(msg.payload) == last_payload):
+        return
+    if(str(msg.payload) == "b'1")
+
 def client_status(msg):
     global last_status
     global json_template
