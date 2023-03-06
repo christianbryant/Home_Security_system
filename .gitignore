@@ -1476,3 +1476,7 @@ Hub_Code/information.json
 git-filter-repo
 Security_Cam/information.json
 Security_Cam/.dockerignore
+Security_Cam/videos
+Security_Cam/__pycache__
+Hub_Code/aws_config.cfg
+Security_Cam/2023-02-27_18-46.mp4
