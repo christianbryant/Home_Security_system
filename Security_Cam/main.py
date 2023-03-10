@@ -1,9 +1,10 @@
-import paho.mqtt.client as mqtt
+import mqtt
 import json
 from datetime import datetime
 import cv2
 import pyaudio as pa
 import video as vid
+import time
 # import threading
 
 # Referenced https://www.javatpoint.com/webcam-motion-detector-in-python and https://towardsdatascience.com/image-analysis-for-beginners-creating-a-motion-detector-with-opencv-4ca6faba4b42 for OpenCV intigration 
@@ -11,15 +12,15 @@ import video as vid
 with open('information.json') as f:
     data = json.load(f)
 
-OPENCV_VIDEOCAPTURE_DEBUG=1
 host = data['host']
 port = data['port']
+username = data['user']
+password = data['pass']
 
 last_payload = "N/A"
 last_status = "N/A"
 
-username = data['user']
-password = data['pass']
+OPENCV_VIDEOCAPTURE_DEBUG = 1
 
 #Number of days(In seconds) to keep physical on memory backups of videos 
 days = 604800
@@ -27,6 +28,7 @@ days = 604800
 staticBack = None
 
 movement_counter = 0
+max_movement = 0
 wf = None
 
 CHUNK = 4096
@@ -36,42 +38,7 @@ video = vid.VideoRecorder(2560,1440,30,"videos/")
 audio = vid.AudioRecorder(CHUNK, FORMAT, 2, RATE)
 aws = vid.Uploading(data['aws'], data['aws_sec'], data['aws_bucket'], data['region'])
 delete_vid = vid.DeleteBackups('videos', days)
-
-audio_frames = []
-
-# cams_test = 500
-# for i in range(0, cams_test):
-#     mainVideo = cv2.VideoCapture(i)
-#     test, frame = mainVideo.read()
-#     if test:
-#         print("i : "+str(i)+" /// result: "+str(test))
-
-def on_connect(client, data, flags, rc):
-    print("Connected with result code " + str(rc))
-    client.subscribe("Webcam_living_room")
-    client.publish("/online/webcam", "Online", True)
-def on_publish(client, user, mid):
-    print("Publish was accepted from broker")
-    delete_vid.delete_files()
-def on_disconnect(client, user, rc):
-    if rc != 0:
-        print("Unexpected disconnect from MQTT Broker!")
-
-
-# Create client
-client = mqtt.Client()
-# Set callback functions
-client.on_connect = on_connect
-client.on_publish = on_publish
-client.on_disconnect = on_disconnect
-# Set username and password given via information.json
-client.username_pw_set(username, password)
-client.will_set("/online/webcam", "Offline", 2, True)
-# Connect to MQTT broker
-client.loop_start()
-client.connect(host, port, 60)
-
-
+mqtt_client = mqtt.MQTT(username, password, host, port)
 
 def get_time():
     if datetime.now().hour < 10:
@@ -101,6 +68,7 @@ def get_time():
 
 def motion_dectector():
     global movement_counter
+    global max_movement
     global video
     global audio
     previous_frame = None
@@ -127,11 +95,16 @@ def motion_dectector():
 
         contours,_ = cv2.findContours(thresh_frame.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         for contour in contours:
-            if cv2.contourArea(contour) < 1000:
+            # This compare value adjusts the motions sensitivity
+            if cv2.contourArea(contour) < 8000:
                 continue
             (x, y, w, h) = cv2.boundingRect(contour)
             motion = 1
-            movement_counter = 1000 #Final will be 1000
+            # This compare value adjusts the maximum amount of recording time when movement is found
+            if max_movement <= 10000:
+                movement_counter = 500 #Final will be 500
+                max_movement += 1
+                print("movement count is: %s" % (str(max_movement)))
             cv2.rectangle(frame, (x,y),(x+w, y+h), (0,255,0), 2)
 
         font = cv2.FONT_HERSHEY_SIMPLEX
@@ -140,6 +113,7 @@ def motion_dectector():
         if movement_counter <= 0:
             motion = 0
             movement_counter = 0
+            max_movement = 0
         else:
             print("movement_counter = " + str(movement_counter))
             video.write_frames(frame)
@@ -148,12 +122,23 @@ def motion_dectector():
         if prev_motion != motion:
             if prev_motion == 0:
                 video.start_recording()
-                cv2.imwrite(video.image_path, frame)
+                check, frame2 = video.mainVideo.read()
+                check, frame2 = video.mainVideo.read()
+                check, frame2 = video.mainVideo.read()
+                check, frame2 = video.mainVideo.read()
+                check, frame2 = video.mainVideo.read()
+                check, frame2 = video.mainVideo.read()
+                check, frame2 = video.mainVideo.read()
+                check, frame2 = video.mainVideo.read()
+                check, frame2 = video.mainVideo.read()
+                check, frame2 = video.mainVideo.read()
+                cv2.imwrite(video.image_path, frame2)
                 with open(video.image_path, "rb") as f:
                     content = f.read()
                 byteArr = bytearray(content)
-                client.publish("motion_image_livingroom", byteArr, 2)
+                mqtt_client.client.publish("motion_image_livingroom", byteArr, 2)
                 f.close()
+                mqtt_client.client.publish("webcam_motion", motion)
             else:
                 if video.writer is None:
                     video.writer = None
@@ -164,14 +149,10 @@ def motion_dectector():
                     process_media.video_produce()
                     video.audio_path = None
                     aws.upload_video(video.end_path, video.aws_video)
-                    client.publish("video_url", aws.s3_url)
+                    mqtt_client.client.publish("video_url", aws.s3_url)
+                    mqtt_client.client.publish("webcam_motion", motion)
                     
-            client.publish("webcam_motion", motion)
         prev_motion = motion
-
-        # cv2.imshow("This is the threshold frame created from the system's webcam", thresh_frame)
-
-        # cv2.imshow("This is the one example of the color frame from the system's webcam", frame)
 
         key = cv2.waitKey(1)
         if key == ord('m'):

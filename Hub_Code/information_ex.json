@@ -4,5 +4,9 @@
     "user" : "YOUR_USER",
     "pass" : "PASSWORD",
     "weburl" : "DISCORD_WEBHOOK_URL",
-    "topics" : [["YOUR_TOPIC_NAME", 2]]
+    "topics" : [["YOUR_TOPIC_NAME", 2]],
+    "aws_bucket" : "BUCKET_NAME",
+    "region" : "AWS_REGION",
+    "aws" : "AWS_PUBLIC_KEY",
+    "aws_sec" : "AWS_PRIVATE_KEY"
 }
