@@ -1,11 +1,11 @@
 import cv2
 import wave
 import pyaudio as pa
-import subprocess
 import os
 from datetime import datetime
 import time
 import boto3 as boto
+import ffmpeg
 from boto3.s3.transfer import S3Transfer
 
 class VideoRecorder:
@@ -67,7 +67,7 @@ class VideoRecorder:
         if self.writer is None:
             return
         self.frame = frame
-        cv2.imshow("Recording", self.frame)
+        # cv2.imshow("Recording", self.frame)
         if self.frame is None:
             print("frame no exist?")
             return
@@ -76,7 +76,7 @@ class VideoRecorder:
     def stop_recording(self):
         if self.writer is None:
             return
-        cv2.destroyWindow("Recording")
+        # cv2.destroyWindow("Recording")
         self.writer.release()
         self.writer = None
 
@@ -127,15 +127,16 @@ class Processing:
         self.image = image_path
     
     def video_produce(self):
-        cmd = "ffmpeg -i "+ self.video + " -filter:v \"setpts=2.5*PTS\" " + self.slowed
-        subprocess.call(cmd, shell=True)
+        input_video = ffmpeg.input(self.video)
+        slowed_video = input_video.video.filter('setpts', '2.5*PTS')
+        slowed_video.output(self.slowed).run(overwrite_output=True)
         print("Slowed video down to correct frame rate")
-        self.dir = os.getcwd()
-        temp = open(self.end,"w")
-        temp.close()
-        cmd = "ffmpeg -y -i " + self.audio + " -r 30 -i " + self.slowed + " -filter:a aresample=async=1 -c:a flac -strict -2 -c:v copy " + self.end
-        subprocess.call(cmd, shell=True)                                     # "Muxing Done
+
+        input_audio = ffmpeg.input(self.audio)
+        slowed_video = ffmpeg.input(self.slowed)
+        ffmpeg.output(input_audio, slowed_video, self.end, vcodec='copy', acodec='flac', strict='experimental', r=30).run(overwrite_output=True)
         print("Muxed video and audio together...")
+        self.dir = os.getcwd()
         self.clear_files()
 
     def clear_files(self):

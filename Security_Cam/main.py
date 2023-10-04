@@ -5,7 +5,7 @@ import cv2
 import pyaudio as pa
 import video as vid
 import time
-# import threading
+import threading
 
 # Referenced https://www.javatpoint.com/webcam-motion-detector-in-python and https://towardsdatascience.com/image-analysis-for-beginners-creating-a-motion-detector-with-opencv-4ca6faba4b42 for OpenCV intigration 
 
@@ -33,13 +33,35 @@ CHUNK = 4096
 FORMAT = pa.paInt24
 RATE = 48000
 # For recording and muxing audio
-video = vid.VideoRecorder(2560,1440,30,"videos/")
+video = vid.VideoRecorder(1080,720,30,"videos/")
 audio = vid.AudioRecorder(CHUNK, FORMAT, 2, RATE)
 # AWS setup
 aws = vid.Uploading(data['aws'], data['aws_sec'], data['aws_bucket'], data['region'])
 delete_vid = vid.DeleteBackups('videos', days)
 #MQTT Setup
-mqtt_client = mqtt.MQTT(username, password, host, port)
+def connect_mqtt():
+    while True:
+        try:
+            mqtt_client = mqtt.MQTT(username, password, host, port)
+            print("Connected to MQTT Broker")
+            return mqtt_client
+        except Exception as e:
+            print(f"MQTT Connection Failed: {e}")
+            print("Retrying in 5 seconds")
+            time.sleep(5)
+
+mqtt_client = connect_mqtt()
+
+def video_threading_task(video_path, s_path, audio_path, end_path, image_path, motion):
+    process_media = vid.Processing(video.path, video.slowed_path, video.audio_path, video.end_path, video.image_path)
+    process_media.video_produce()
+    video.audio_path = None
+    # Upload the video to the AWS S3 service
+    aws.upload_video(video.end_path, video.aws_video)
+    # Provide the video url and state change to the MQTT Broker
+    mqtt_client.client.publish("video_url", aws.s3_url)
+    mqtt_client.client.publish("webcam_motion", motion)
+
 
 # Used to display time for video feed
 def get_time():
@@ -106,10 +128,10 @@ def motion_dectector():
             (x, y, w, h) = cv2.boundingRect(contour)
             motion = 1
             # This compare value adjusts the maximum amount of recording time when movement is found
-            if max_movement <= 10000:
-                movement_counter = 500 #Final will be 500
+            if max_movement <= 2500:
+                movement_counter = 250 #Final will be 500
                 max_movement += 1
-                print("movement count is: %s" % (str(max_movement)))
+                # print("movement count is: %s" % (str(max_movement)))
             cv2.rectangle(frame, (x,y),(x+w, y+h), (0,255,0), 2)
         # Sets up time display
         font = cv2.FONT_HERSHEY_SIMPLEX
@@ -126,20 +148,12 @@ def motion_dectector():
             video.write_frames(frame)
             audio.write_frame(video.audio_path)
             movement_counter -= 1
+            # print("movement count is: %s" % (str(movement_counter)))
         # If the prevous motion was not the current motion, either start recording, take a screenshot, or stop recording and ping MQTT broker with changes of state
         if prev_motion != motion:
             if prev_motion == 0:
                 video.start_recording()
                 # This is for the screenshot
-                check, frame2 = video.mainVideo.read()
-                check, frame2 = video.mainVideo.read()
-                check, frame2 = video.mainVideo.read()
-                check, frame2 = video.mainVideo.read()
-                check, frame2 = video.mainVideo.read()
-                check, frame2 = video.mainVideo.read()
-                check, frame2 = video.mainVideo.read()
-                check, frame2 = video.mainVideo.read()
-                check, frame2 = video.mainVideo.read()
                 check, frame2 = video.mainVideo.read()
                 cv2.imwrite(video.image_path, frame2)
                 with open(video.image_path, "rb") as f:
@@ -157,14 +171,19 @@ def motion_dectector():
                     # Stop recording audio and video, proceed to mux the video and audio streams together to produce a video
                     video.stop_recording()
                     audio.stop_recording()
-                    process_media = vid.Processing(video.path, video.slowed_path, video.audio_path, video.end_path, video.image_path)
-                    process_media.video_produce()
-                    video.audio_path = None
-                    # Upload the video to the AWS S3 service
-                    aws.upload_video(video.end_path, video.aws_video)
-                    # Provide the video url and state change to the MQTT Broker
-                    mqtt_client.client.publish("video_url", aws.s3_url)
-                    mqtt_client.client.publish("webcam_motion", motion)
+                    # Threading to speed up the process of muxing and uploading to AWS
+                    thread = threading.Thread(target=video_threading_task, args=(video.path, video.slowed_path, video.audio_path, video.end_path, video.image_path, motion))
+                    thread.setDaemon(True)
+                    thread.start()
+
+                    # process_media = vid.Processing(video.path, video.slowed_path, video.audio_path, video.end_path, video.image_path)
+                    # process_media.video_produce()
+                    # video.audio_path = None
+                    # # Upload the video to the AWS S3 service
+                    # aws.upload_video(video.end_path, video.aws_video)
+                    # # Provide the video url and state change to the MQTT Broker
+                    # mqtt_client.client.publish("video_url", aws.s3_url)
+                    # mqtt_client.client.publish("webcam_motion", motion)
                     
         prev_motion = motion
         # Used to quit the service when windows are open on the device
